@@ -1,0 +1,57 @@
+# Hailo-8L Configuration
+# Raspberry Pi 5 AI Kit Settings
+
+device:
+  id: 0
+  power_mode: "performance"  # performance | balanced | low_power
+
+# PCIe настройки
+pcie:
+  generation: 3  # Требуется Gen3 для полной производительности
+  lanes: 1
+
+# Модели
+models:
+  fish_detector:
+    path: "/app/models/fish_detector_yolov8n.hef"
+    input_size: [640, 640]
+    input_format: "NHWC"
+    batch_size: 2
+    nms_threshold: 0.45
+    confidence_threshold: 0.5
+    classes:
+      - fish
+      - not_fish
+
+  fish_classifier:
+    path: "/app/models/fish_classifier.hef"
+    input_size: [224, 224]
+    input_format: "NHWC"
+    batch_size: 4
+    top_k: 5
+    confidence_threshold: 0.3
+
+# Inference настройки
+inference:
+  scheduler: "round_robin"
+  timeout_ms: 100
+  async_queue_depth: 3
+  max_batch_latency_ms: 50
+
+# Буферы памяти
+memory:
+  input_buffer_pool: 4
+  output_buffer_pool: 4
+  pre_allocated: true
+
+# Профилирование
+profiling:
+  enabled: false
+  output_dir: "/app/logs/profiling"
+  interval_seconds: 60
+
+# Температурный мониторинг
+thermal:
+  warning_threshold_c: 70
+  critical_threshold_c: 85
+  throttle_on_warning: true
