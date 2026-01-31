@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish AI Analyzer - BlueOS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(0, 150, 136, 0.9);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .header h1 {
+            font-size: 1.5em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-badge {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .status-online { background: #4caf50; }
+        .status-offline { background: #f44336; }
+
+        .container {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: rgba(255,255,255,0.05);
+            border-radius: 10px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .panel h2 {
+            font-size: 1.1em;
+            margin-bottom: 15px;
+            color: #00bcd4;
+            border-bottom: 1px solid rgba(0,188,212,0.3);
+            padding-bottom: 10px;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16/9;
+        }
+
+        #video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .detection-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .detection-box {
+            position: absolute;
+            border: 2px solid #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+
+        .detection-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background: #00ff00;
+            color: #000;
+            padding: 2px 8px;
+            font-size: 12px;
+            border-radius: 3px;
+            white-space: nowrap;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #00bcd4;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .fish-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .fish-item {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+
+        .fish-color {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .fish-info {
+            flex: 1;
+        }
+
+        .fish-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .fish-meta {
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        .freshness-badge {
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 0.75em;
+        }
+
+        .fresh { background: #4caf50; }
+        .acceptable { background: #ff9800; }
+        .spoiled { background: #f44336; }
+
+        .color-display {
+            display: flex;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+        .color-channel {
+            flex: 1;
+            text-align: center;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 0.75em;
+        }
+
+        .spectrum-bar {
+            height: 20px;
+            background: linear-gradient(to right,
+                #8b00ff 0%, #0000ff 17%, #00ff00 33%,
+                #ffff00 50%, #ff8000 67%, #ff0000 100%);
+            border-radius: 10px;
+            margin: 10px 0;
+            position: relative;
+        }
+
+        .spectrum-marker {
+            position: absolute;
+            top: -5px;
+            width: 4px;
+            height: 30px;
+            background: white;
+            border-radius: 2px;
+            transform: translateX(-50%);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: #00bcd4;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #00acc1;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.1);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+
+        @media (max-width: 1000px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="white">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            Fish AI Analyzer
+        </h1>
+        <div>
+            <span id="status-badge" class="status-badge status-offline">Offline</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="main-content">
+            <div class="panel">
+                <h2>Live Video Feed</h2>
+                <div class="video-container">
+                    <canvas id="video-feed"></canvas>
+                    <div id="detection-overlay" class="detection-overlay"></div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="startStream()">Start Stream</button>
+                    <button class="btn btn-secondary" onclick="stopStream()">Stop</button>
+                    <button class="btn btn-secondary" onclick="captureFrame()">Capture</button>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Spectral Analysis (AS7262)</h2>
+                <div class="spectrum-bar">
+                    <div id="spectrum-marker" class="spectrum-marker" style="left: 50%;"></div>
+                </div>
+                <div class="color-display" id="spectrum-channels">
+                    <div class="color-channel" style="background: #8b00ff;">V: --</div>
+                    <div class="color-channel" style="background: #0066ff;">B: --</div>
+                    <div class="color-channel" style="background: #00cc00;">G: --</div>
+                    <div class="color-channel" style="background: #cccc00; color: #333;">Y: --</div>
+                    <div class="color-channel" style="background: #ff8800;">O: --</div>
+                    <div class="color-channel" style="background: #ff0000;">R: --</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <h2>Statistics</h2>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="fish-count">0</div>
+                        <div class="stat-label">Fish Detected</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="fps">0</div>
+                        <div class="stat-label">FPS</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="latency">0</div>
+                        <div class="stat-label">Latency (ms)</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="temp">--</div>
+                        <div class="stat-label">Sensor Temp (°C)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Detected Fish</h2>
+                <div class="fish-list" id="fish-list">
+                    <div class="fish-item">
+                        <div class="fish-color" style="background: rgb(180, 220, 150);"></div>
+                        <div class="fish-info">
+                            <div class="fish-name">Atlantic Salmon</div>
+                            <div class="fish-meta">
+                                Confidence: 87%<br>
+                                Color: Green
+                            </div>
+                        </div>
+                        <span class="freshness-badge fresh">Fresh</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Color Analysis</h2>
+                <div id="color-result">
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div id="detected-color" style="width: 60px; height: 60px; background: #888; border-radius: 8px;"></div>
+                        <div>
+                            <div><strong>RGB:</strong> <span id="rgb-value">--</span></div>
+                            <div><strong>HSV:</strong> <span id="hsv-value">--</span></div>
+                            <div><strong>Class:</strong> <span id="color-class">--</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let canvas, ctx;
+        let isStreaming = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            canvas = document.getElementById('video-feed');
+            ctx = canvas.getContext('2d');
+            canvas.width = 640;
+            canvas.height = 480;
+
+            // Draw placeholder
+            ctx.fillStyle = '#1a1a2e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#444';
+            ctx.font = '20px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Click "Start Stream" to begin', canvas.width/2, canvas.height/2);
+        });
+
+        function startStream() {
+            if (ws) ws.close();
+
+            const wsUrl = `ws://${window.location.host}/ws/stream`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => {
+                document.getElementById('status-badge').textContent = 'Online';
+                document.getElementById('status-badge').className = 'status-badge status-online';
+                isStreaming = true;
+            };
+
+            ws.onclose = () => {
+                document.getElementById('status-badge').textContent = 'Offline';
+                document.getElementById('status-badge').className = 'status-badge status-offline';
+                isStreaming = false;
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMessage(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+            };
+        }
+
+        function stopStream() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function handleMessage(data) {
+            if (data.type === 'detection') {
+                updateDetections(data.data);
+            } else if (data.type === 'color') {
+                updateColor(data.data);
+            } else if (data.type === 'stats') {
+                updateStats(data.data);
+            }
+        }
+
+        function updateDetections(data) {
+            // Update fish count
+            document.getElementById('fish-count').textContent = data.fish ? data.fish.length : 0;
+
+            // Update detection overlay
+            const overlay = document.getElementById('detection-overlay');
+            overlay.innerHTML = '';
+
+            if (data.fish) {
+                data.fish.forEach(fish => {
+                    const box = document.createElement('div');
+                    box.className = 'detection-box';
+                    box.style.left = fish.bbox[0] + 'px';
+                    box.style.top = fish.bbox[1] + 'px';
+                    box.style.width = (fish.bbox[2] - fish.bbox[0]) + 'px';
+                    box.style.height = (fish.bbox[3] - fish.bbox[1]) + 'px';
+
+                    const label = document.createElement('div');
+                    label.className = 'detection-label';
+                    label.textContent = `${fish.class} ${(fish.confidence * 100).toFixed(0)}%`;
+                    box.appendChild(label);
+
+                    overlay.appendChild(box);
+                });
+            }
+
+            // Update latency
+            if (data.processing_time_ms) {
+                document.getElementById('latency').textContent = data.processing_time_ms.toFixed(0);
+            }
+        }
+
+        function updateColor(data) {
+            if (data.rgb) {
+                const [r, g, b] = data.rgb;
+                document.getElementById('detected-color').style.background = `rgb(${r},${g},${b})`;
+                document.getElementById('rgb-value').textContent = `(${r}, ${g}, ${b})`;
+            }
+
+            if (data.hsv) {
+                document.getElementById('hsv-value').textContent =
+                    `(${data.hsv.hue.toFixed(0)}°, ${(data.hsv.saturation*100).toFixed(0)}%, ${(data.hsv.value*100).toFixed(0)}%)`;
+            }
+
+            if (data.color_class) {
+                document.getElementById('color-class').textContent = data.color_class;
+            }
+
+            // Update spectrum channels
+            if (data.spectrum) {
+                const channels = ['violet', 'blue', 'green', 'yellow', 'orange', 'red'];
+                const shortNames = ['V', 'B', 'G', 'Y', 'O', 'R'];
+                const container = document.getElementById('spectrum-channels');
+
+                channels.forEach((ch, i) => {
+                    if (data.spectrum[ch] !== undefined) {
+                        container.children[i].textContent = `${shortNames[i]}: ${data.spectrum[ch].toFixed(1)}`;
+                    }
+                });
+            }
+        }
+
+        function updateStats(data) {
+            if (data.fps) document.getElementById('fps').textContent = data.fps.toFixed(1);
+            if (data.temperature_c) document.getElementById('temp').textContent = data.temperature_c;
+        }
+
+        function captureFrame() {
+            // Trigger single analysis
+            fetch('/api/v1/analyze', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    console.log('Analysis result:', data);
+                    if (data.color) updateColor(data.color);
+                    if (data.detections) updateDetections({ fish: data.detections });
+                })
+                .catch(e => console.error('Analysis failed:', e));
+        }
+
+        // Periodic stats update
+        setInterval(() => {
+            if (isStreaming) {
+                fetch('/api/v1/stats')
+                    .then(r => r.json())
+                    .then(data => updateStats(data))
+                    .catch(() => {});
+            }
+        }, 2000);
+    </script>
+</body>
+</html>
