@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SBP AI - Archaeological Detection</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: rgba(139, 69, 19, 0.9);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 { font-size: 1.4em; }
+
+        .status { display: flex; gap: 15px; align-items: center; }
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; }
+        .online { background: #3fb950; }
+        .offline { background: #f85149; }
+
+        .container {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+
+        .panel {
+            background: rgba(22, 27, 34, 0.9);
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
+        .panel h2 {
+            font-size: 1em;
+            color: #58a6ff;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .echogram-container {
+            position: relative;
+            background: #000;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+
+        #echogram-canvas {
+            width: 100%;
+            height: 400px;
+        }
+
+        .echogram-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .layer-label {
+            position: absolute;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 3px 8px;
+            font-size: 11px;
+            border-radius: 3px;
+            border-left: 3px solid;
+        }
+
+        .object-marker {
+            position: absolute;
+            border: 2px solid #ff6b6b;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+
+        .depth-scale {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            width: 40px;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 5px;
+            font-size: 10px;
+        }
+
+        .colorbar {
+            width: 20px;
+            height: 100%;
+            background: linear-gradient(to bottom,
+                #ffff00, #ff8000, #ff0000, #800000, #400000, #000000);
+            border-radius: 3px;
+            margin: 10px 0;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .stat-box {
+            background: #21262d;
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8em;
+            font-weight: bold;
+            color: #58a6ff;
+        }
+
+        .stat-label {
+            font-size: 0.75em;
+            color: #8b949e;
+            margin-top: 5px;
+        }
+
+        .objects-list {
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .object-item {
+            background: #21262d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+        }
+
+        .object-item.shipwreck { border-color: #f85149; }
+        .object-item.anchor { border-color: #a371f7; }
+        .object-item.amphora { border-color: #d29922; }
+        .object-item.structure { border-color: #3fb950; }
+        .object-item.unknown { border-color: #8b949e; }
+
+        .object-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .object-type {
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        .object-confidence {
+            background: rgba(88, 166, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+        }
+
+        .object-details {
+            font-size: 0.85em;
+            color: #8b949e;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 5px;
+        }
+
+        .priority-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75em;
+            font-weight: bold;
+        }
+
+        .priority-5 { background: #f85149; color: white; }
+        .priority-4 { background: #d29922; color: black; }
+        .priority-3 { background: #58a6ff; color: black; }
+        .priority-2 { background: #8b949e; }
+        .priority-1 { background: #30363d; }
+
+        .layers-panel {
+            margin-top: 15px;
+        }
+
+        .layer-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            background: #21262d;
+            border-radius: 5px;
+            margin-bottom: 5px;
+        }
+
+        .layer-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .layer-water { background: #0066cc; }
+        .layer-mud { background: #4a3728; }
+        .layer-sand { background: #c2b280; }
+        .layer-clay { background: #8b7355; }
+        .layer-gravel { background: #696969; }
+        .layer-rock { background: #2f2f2f; }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background: #238636; color: white; }
+        .btn-primary:hover { background: #2ea043; }
+        .btn-secondary { background: #30363d; color: #c9d1d9; }
+        .btn-secondary:hover { background: #3c434d; }
+        .btn-danger { background: #f85149; color: white; }
+
+        .period-tag {
+            font-size: 0.7em;
+            padding: 2px 6px;
+            border-radius: 8px;
+            background: #30363d;
+            margin-left: 5px;
+        }
+
+        #map-container {
+            height: 200px;
+            background: #21262d;
+            border-radius: 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8b949e;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SBP AI - Archaeological Object Detection</h1>
+        <div class="status">
+            <span>SUBPRO2545</span>
+            <div id="sbp-status" class="status-dot offline"></div>
+            <span>Hailo-8L</span>
+            <div id="hailo-status" class="status-dot offline"></div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="main">
+            <div class="panel">
+                <h2>Real-time Echogram</h2>
+                <div class="stats-row">
+                    <div class="stat-box">
+                        <div class="stat-value" id="ping-count">0</div>
+                        <div class="stat-label">Pings</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="water-depth">--</div>
+                        <div class="stat-label">Water Depth (m)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="penetration">--</div>
+                        <div class="stat-label">Penetration (m)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value" id="objects-count">0</div>
+                        <div class="stat-label">Objects Found</div>
+                    </div>
+                </div>
+
+                <div class="echogram-container">
+                    <canvas id="echogram-canvas"></canvas>
+                    <div id="echogram-overlay" class="echogram-overlay"></div>
+                    <div class="depth-scale" id="depth-scale"></div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="startStream()">Start</button>
+                    <button class="btn btn-secondary" onclick="stopStream()">Stop</button>
+                    <button class="btn btn-secondary" onclick="exportData()">Export SEG-Y</button>
+                    <button class="btn btn-secondary" onclick="generateReport()">Report</button>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Sediment Layers</h2>
+                <div class="layers-panel" id="layers-list">
+                    <div class="layer-item">
+                        <div class="layer-color layer-water"></div>
+                        <span>Water</span>
+                        <span style="margin-left: auto;">0 - 12.5 m</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <h2>Archaeological Objects (<span id="total-objects">0</span>)</h2>
+                <div class="objects-list" id="objects-list">
+                    <div class="object-item shipwreck">
+                        <div class="object-header">
+                            <span class="object-type">Wooden Shipwreck</span>
+                            <span class="object-confidence">87%</span>
+                        </div>
+                        <div class="object-details">
+                            <span>Depth: 3.2 m</span>
+                            <span>Size: ~15 m</span>
+                            <span>Period: Medieval<span class="period-tag">500-1500</span></span>
+                            <span>Priority: <span class="priority-badge priority-5">5</span></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Track Map</h2>
+                <div id="map-container">
+                    Map placeholder
+                </div>
+            </div>
+
+            <div class="panel" style="margin-top: 20px;">
+                <h2>Session Summary</h2>
+                <div style="font-size: 0.9em;">
+                    <p><strong>Distance:</strong> <span id="distance">0</span> m</p>
+                    <p><strong>Duration:</strong> <span id="duration">00:00:00</span></p>
+                    <p><strong>Sites Found:</strong> <span id="sites-count">0</span></p>
+                    <p><strong>High Priority:</strong> <span id="high-priority">0</span></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let canvas, ctx;
+        let echogramData = [];
+        const maxPings = 512;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            canvas = document.getElementById('echogram-canvas');
+            ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = 400;
+
+            drawPlaceholder();
+            updateDepthScale(50);
+        });
+
+        function drawPlaceholder() {
+            ctx.fillStyle = '#0d1117';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#30363d';
+            ctx.font = '16px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('Waiting for SBP data...', canvas.width/2, canvas.height/2);
+        }
+
+        function updateDepthScale(maxDepth) {
+            const scale = document.getElementById('depth-scale');
+            scale.innerHTML = '';
+            for (let d = 0; d <= maxDepth; d += 10) {
+                const div = document.createElement('div');
+                div.textContent = d + 'm';
+                scale.appendChild(div);
+            }
+        }
+
+        function startStream() {
+            if (ws) ws.close();
+
+            ws = new WebSocket(`ws://${window.location.host}/ws/stream`);
+
+            ws.onopen = () => {
+                document.getElementById('sbp-status').classList.replace('offline', 'online');
+                document.getElementById('hailo-status').classList.replace('offline', 'online');
+            };
+
+            ws.onclose = () => {
+                document.getElementById('sbp-status').classList.replace('online', 'offline');
+                document.getElementById('hailo-status').classList.replace('online', 'offline');
+            };
+
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                if (data.type === 'analysis') {
+                    handleAnalysis(data.data);
+                }
+            };
+        }
+
+        function stopStream() {
+            if (ws) { ws.close(); ws = null; }
+        }
+
+        function handleAnalysis(data) {
+            // Update stats
+            document.getElementById('ping-count').textContent = data.ping_count || 0;
+            document.getElementById('water-depth').textContent =
+                data.water_depth_m ? data.water_depth_m.toFixed(1) : '--';
+            document.getElementById('penetration').textContent =
+                data.penetration_m ? data.penetration_m.toFixed(1) : '--';
+
+            // Update echogram
+            if (data.echogram_column) {
+                echogramData.push(data.echogram_column);
+                if (echogramData.length > maxPings) echogramData.shift();
+                drawEchogram();
+            }
+
+            // Update layers
+            if (data.layers) updateLayers(data.layers);
+
+            // Update objects
+            if (data.objects) updateObjects(data.objects);
+        }
+
+        function drawEchogram() {
+            const w = canvas.width;
+            const h = canvas.height;
+
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, w, h);
+
+            if (echogramData.length === 0) return;
+
+            const colWidth = Math.max(1, w / maxPings);
+            const numSamples = echogramData[0].length;
+
+            for (let x = 0; x < echogramData.length; x++) {
+                const col = echogramData[x];
+                for (let y = 0; y < col.length; y++) {
+                    const val = col[y];
+                    ctx.fillStyle = getColorForValue(val);
+                    ctx.fillRect(x * colWidth, (y / numSamples) * h, colWidth + 1, h / numSamples + 1);
+                }
+            }
+        }
+
+        function getColorForValue(val) {
+            // Seismic colormap
+            if (val < 50) return `rgb(0, 0, ${val * 2})`;
+            if (val < 128) return `rgb(0, ${(val - 50) * 3}, 255)`;
+            if (val < 200) return `rgb(${(val - 128) * 3}, 255, ${255 - (val - 128) * 3})`;
+            return `rgb(255, ${255 - (val - 200) * 4}, 0)`;
+        }
+
+        function updateLayers(layers) {
+            const container = document.getElementById('layers-list');
+            container.innerHTML = layers.map(l => `
+                <div class="layer-item">
+                    <div class="layer-color layer-${l.type.toLowerCase()}"></div>
+                    <span>${l.type}</span>
+                    <span style="margin-left: auto;">${l.depth_start_m.toFixed(1)} - ${l.depth_end_m.toFixed(1)} m</span>
+                </div>
+            `).join('');
+        }
+
+        function updateObjects(objects) {
+            document.getElementById('objects-count').textContent = objects.length;
+            document.getElementById('total-objects').textContent = objects.length;
+
+            const container = document.getElementById('objects-list');
+            container.innerHTML = objects.map(o => {
+                const typeClass = getTypeClass(o.class);
+                return `
+                <div class="object-item ${typeClass}">
+                    <div class="object-header">
+                        <span class="object-type">${formatClass(o.class)}</span>
+                        <span class="object-confidence">${(o.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div class="object-details">
+                        <span>Depth: ${o.location.depth_below_seabed_m.toFixed(1)} m</span>
+                        <span>Size: ~${o.dimensions.length_m.toFixed(1)} m</span>
+                        <span>Period: ${o.assessment.period}</span>
+                        <span>Priority: <span class="priority-badge priority-${o.assessment.priority}">${o.assessment.priority}</span></span>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function getTypeClass(className) {
+            if (className.includes('SHIPWRECK')) return 'shipwreck';
+            if (className.includes('ANCHOR')) return 'anchor';
+            if (className.includes('AMPHORA')) return 'amphora';
+            if (className.includes('STRUCTURE')) return 'structure';
+            return 'unknown';
+        }
+
+        function formatClass(className) {
+            return className.replace(/_/g, ' ').toLowerCase()
+                .replace(/\b\w/g, l => l.toUpperCase());
+        }
+
+        function exportData() {
+            fetch('/api/v1/export', { method: 'POST' })
+                .then(r => r.blob())
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `sbp_data_${Date.now()}.segy`;
+                    a.click();
+                });
+        }
+
+        function generateReport() {
+            fetch('/api/v1/archaeological')
+                .then(r => r.json())
+                .then(data => {
+                    console.log('Archaeological Report:', data);
+                    alert(`Report generated!\n\nTotal objects: ${data.summary.total_objects}\nSites: ${data.summary.total_sites}\nHigh priority: ${data.summary.high_priority_count}`);
+                });
+        }
+
+        // Periodic stats update
+        setInterval(() => {
+            fetch('/api/v1/stats').then(r => r.json()).then(data => {
+                if (data.sbp) {
+                    document.getElementById('ping-count').textContent = data.sbp.ping_count || 0;
+                }
+                if (data.archaeological) {
+                    document.getElementById('sites-count').textContent = data.archaeological.total_sites || 0;
+                    document.getElementById('high-priority').textContent =
+                        data.archaeological.total_objects || 0;
+                }
+            }).catch(() => {});
+        }, 3000);
+    </script>
+</body>
+</html>
