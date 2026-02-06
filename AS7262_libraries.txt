@@ -1,0 +1,40 @@
+AS7262 - 6-канальный спектральный датчик видимого света
+========================================================
+
+ARDUINO БИБЛИОТЕКИ:
+-------------------
+
+1. SparkFun AS726X Arduino Library
+   URL: https://github.com/sparkfun/SparkFun_AS726X_Arduino_Library
+   Описание: Официальная библиотека SparkFun для AS7262/AS7263
+   Интерфейс: I2C, SPI
+
+2. Adafruit AS726x Library
+   URL: https://github.com/adafruit/Adafruit_AS726x
+   Описание: Arduino драйвер от Adafruit для серии AS726x
+   Особенности: Калиброванные значения цветов (R,G,B,Y,O,V)
+
+3. SparkFun Qwiic Spectral Sensor (Hardware + Library)
+   URL: https://github.com/sparkfun/Qwiic_Spectral_Sensor_AS726X
+   Описание: Qwiic breakout для AS7261/AS7262/AS7263
+
+MICROPYTHON:
+------------
+
+4. AS726X_LoPy (MicroPython)
+   URL: https://github.com/jajberni/AS726X_LoPy
+   Описание: MicroPython драйвер для PyCom плат
+
+RASPBERRY PI / PYTHON:
+----------------------
+
+5. AS7262_Pi (Python)
+   URL: https://github.com/UnfinishedStuff/AS7262_Pi
+   Описание: Python скрипт для Raspberry Pi
+
+PARTICLE:
+---------
+
+6. SparkFunAS726X (Particle)
+   URL: https://docs.particle.io/reference/device-os/libraries/s/SparkFunAS726X/
+   Описание: Библиотека для Particle устройств

@@ -1,0 +1,39 @@
+{
+  "name": "Fish AI Analyzer",
+  "description": "Real-time fish detection and color analysis using Hailo-8L NPU and AS7262 spectral sensor",
+  "docker": "fishaimodule/fish-ai-analyzer",
+  "version": "1.0.0",
+  "website": "https://github.com/example/fish-ai-module",
+  "authors": [
+    {
+      "name": "Fish AI Team",
+      "email": "contact@example.com"
+    }
+  ],
+  "company": {
+    "name": "Fish AI",
+    "about": "AI-powered marine life analysis for underwater robotics"
+  },
+  "readme": "https://raw.githubusercontent.com/example/fish-ai-module/main/README.md",
+  "links": {
+    "documentation": "https://fish-ai-docs.example.com",
+    "support": "https://github.com/example/fish-ai-module/issues",
+    "source": "https://github.com/example/fish-ai-module"
+  },
+  "requirements": {
+    "blueos": ">=1.1.0",
+    "hardware": {
+      "raspberry_pi": "5",
+      "hailo": "8L",
+      "i2c": true
+    }
+  },
+  "tags": [
+    "AI",
+    "fish-detection",
+    "color-analysis",
+    "hailo",
+    "spectral-sensor",
+    "marine-biology"
+  ]
+}

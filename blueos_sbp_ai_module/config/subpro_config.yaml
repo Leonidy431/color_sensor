@@ -1,0 +1,118 @@
+# SUBPRO2545 Configuration
+# General Acoustics Sub-Bottom Profiler
+
+device:
+  name: "SUBPRO2545"
+  manufacturer: "General Acoustics"
+  serial_number: ""
+
+# Подключение
+connection:
+  ip: "192.168.2.100"
+  port: 4040
+  protocol: "udp"  # udp | tcp
+  timeout_s: 5
+
+# Параметры съёмки
+acquisition:
+  # Частота (25-45 кГц)
+  frequency_khz: 35.0
+  frequency_mode: "fixed"  # fixed | sweep | chirp
+
+  # Параметры импульса
+  pulse_length_us: 100
+  pulse_type: "ricker"  # ricker | chirp | burst
+
+  # Скорость опроса
+  ping_rate_hz: 20.0
+
+  # Диапазон
+  range_m: 50.0
+
+  # Разрешение
+  # Вертикальное: 1-2 см (best in class!)
+  vertical_resolution_cm: 1.5
+  # Горизонтальное (зависит от скорости)
+  horizontal_resolution_m: 0.5
+
+# Усиление
+gain:
+  mode: "tvg"  # auto | manual | tvg
+  manual_db: 20.0
+  tvg_db_per_m: 0.5
+
+# Фильтрация
+filtering:
+  bandpass:
+    enabled: true
+    low_khz: 20.0
+    high_khz: 50.0
+
+  # Swell filter (компенсация качки)
+  swell_filter:
+    enabled: true
+    threshold_m: 0.5
+
+  # Stacking (накопление)
+  stacking:
+    enabled: false
+    count: 4
+
+# Запись данных
+recording:
+  enabled: true
+  format: "segy"  # segy | raw | both
+  output_dir: "/data/sbp"
+
+  # Автоматическое разбиение файлов
+  auto_split: true
+  split_size_mb: 500
+  split_duration_min: 60
+
+  # Имена файлов
+  filename_template: "sbp_{date}_{time}_{line}"
+
+  # Метаданные
+  include_navigation: true
+  include_heave: true
+
+# Позиционирование
+positioning:
+  # Источник координат
+  source: "mavlink"  # mavlink | nmea | manual
+
+  # Смещение антенны от транcдьюсера
+  antenna_offset_m:
+    x: 0.0
+    y: 0.0
+    z: 0.0
+
+  # Система координат
+  coordinate_system: "WGS84"
+
+# Компенсация движения
+motion:
+  heave_compensation: true
+  heave_source: "imu"  # imu | mavlink | external
+
+  # Допустимые пределы
+  max_roll_deg: 15.0
+  max_pitch_deg: 15.0
+  max_heave_m: 2.0
+
+# Триггер
+trigger:
+  mode: "internal"  # internal | external | distance
+
+  # Для distance mode
+  distance_interval_m: 0.5
+
+# Мониторинг
+monitoring:
+  # Температура транcдьюсера
+  temperature_warning_c: 45
+  temperature_critical_c: 60
+
+  # Качество сигнала
+  snr_warning_db: 10
+  snr_critical_db: 5

@@ -1,0 +1,114 @@
+# База данных видов рыб для классификации
+# Включает характеристики цвета чешуи для валидации
+
+species:
+  # Пресноводные
+  - id: 0
+    name_en: "Rainbow Trout"
+    name_ru: "Радужная форель"
+    family: "Salmonidae"
+    color_profile:
+      dominant_hue: [0, 30]     # Красно-розовый
+      saturation_range: [0.4, 0.8]
+      iridescent: true
+      pattern: "spotted"
+
+  - id: 1
+    name_en: "Common Carp"
+    name_ru: "Карп обыкновенный"
+    family: "Cyprinidae"
+    color_profile:
+      dominant_hue: [30, 60]    # Жёлто-золотой
+      saturation_range: [0.3, 0.6]
+      iridescent: false
+      pattern: "solid"
+
+  - id: 2
+    name_en: "Pike"
+    name_ru: "Щука"
+    family: "Esocidae"
+    color_profile:
+      dominant_hue: [75, 150]   # Зелёный
+      saturation_range: [0.3, 0.5]
+      iridescent: false
+      pattern: "striped"
+
+  # Морские
+  - id: 10
+    name_en: "Atlantic Salmon"
+    name_ru: "Атлантический лосось"
+    family: "Salmonidae"
+    color_profile:
+      dominant_hue: [200, 220]  # Серебристо-синий
+      saturation_range: [0.2, 0.4]
+      iridescent: true
+      pattern: "spotted"
+
+  - id: 11
+    name_en: "Sea Bass"
+    name_ru: "Сибас"
+    family: "Moronidae"
+    color_profile:
+      dominant_hue: [0, 360]    # Серебристый (низкая насыщенность)
+      saturation_range: [0.05, 0.15]
+      iridescent: true
+      pattern: "solid"
+
+  - id: 12
+    name_en: "Red Snapper"
+    name_ru: "Красный луциан"
+    family: "Lutjanidae"
+    color_profile:
+      dominant_hue: [350, 20]   # Красный
+      saturation_range: [0.5, 0.8]
+      iridescent: false
+      pattern: "solid"
+
+  - id: 13
+    name_en: "Yellowfin Tuna"
+    name_ru: "Желтопёрый тунец"
+    family: "Scombridae"
+    color_profile:
+      dominant_hue: [45, 70]    # Жёлтый (плавники)
+      saturation_range: [0.4, 0.7]
+      iridescent: true
+      pattern: "gradient"
+
+  - id: 14
+    name_en: "Blue Marlin"
+    name_ru: "Синий марлин"
+    family: "Istiophoridae"
+    color_profile:
+      dominant_hue: [200, 240]  # Синий
+      saturation_range: [0.5, 0.8]
+      iridescent: true
+      pattern: "striped"
+
+  - id: 15
+    name_en: "Mackerel"
+    name_ru: "Скумбрия"
+    family: "Scombridae"
+    color_profile:
+      dominant_hue: [180, 220]  # Сине-зелёный
+      saturation_range: [0.3, 0.5]
+      iridescent: true
+      pattern: "striped"
+
+# Настройки классификации
+classification:
+  # Вес цветового анализа в итоговой классификации
+  color_weight: 0.3
+  visual_weight: 0.7
+
+  # Порог совпадения цвета (0-1)
+  color_match_threshold: 0.6
+
+  # Учитывать иридесценцию при низкой уверенности
+  iridescence_boost: 0.1
+
+# Алгоритм сопоставления цвета
+color_matching:
+  method: "hue_histogram"  # hue_histogram | lab_distance | spectral_angle
+  hue_bins: 36
+  saturation_weight: 0.3
+  value_weight: 0.2

@@ -1,0 +1,328 @@
+# База археологических объектов для детекции
+# Sub-Bottom Profiler AI Module
+
+# ============================================================================
+# Классы объектов для нейросетевой модели
+# ============================================================================
+
+classes:
+  # Затонувшие суда
+  - id: 1
+    name: "shipwreck_wooden"
+    name_ru: "Деревянное судно"
+    category: "shipwreck"
+    description: "Остатки деревянного корабля"
+    acoustic_properties:
+      reflection_db_range: [-10, 5]
+      typical_shadow: true
+      layered_structure: true
+    size_range_m:
+      min: [5, 2]
+      max: [50, 10]
+    typical_depth_m: [1, 10]
+    historical_periods: ["ANCIENT", "MEDIEVAL", "EARLY_MODERN"]
+    scientific_value: 0.9
+    training_samples: 1250
+
+  - id: 2
+    name: "shipwreck_metal"
+    name_ru: "Металлическое судно"
+    category: "shipwreck"
+    acoustic_properties:
+      reflection_db_range: [5, 20]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [10, 3]
+      max: [200, 30]
+    typical_depth_m: [0, 5]
+    historical_periods: ["MODERN", "CONTEMPORARY"]
+    scientific_value: 0.5
+    training_samples: 890
+
+  - id: 3
+    name: "shipwreck_fragment"
+    name_ru: "Фрагмент судна"
+    category: "shipwreck"
+    acoustic_properties:
+      reflection_db_range: [-5, 10]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [0.5, 0.3]
+      max: [15, 5]
+    typical_depth_m: [0.5, 8]
+    historical_periods: ["ANCIENT", "MEDIEVAL", "EARLY_MODERN", "MODERN"]
+    scientific_value: 0.6
+    training_samples: 2100
+
+  # Якоря
+  - id: 4
+    name: "anchor_stone"
+    name_ru: "Каменный якорь"
+    category: "anchor"
+    description: "Античный каменный якорь"
+    acoustic_properties:
+      reflection_db_range: [5, 15]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [0.3, 0.2]
+      max: [1.5, 0.8]
+    typical_depth_m: [1, 5]
+    historical_periods: ["ANCIENT"]
+    scientific_value: 0.85
+    training_samples: 340
+
+  - id: 5
+    name: "anchor_iron"
+    name_ru: "Железный якорь"
+    category: "anchor"
+    acoustic_properties:
+      reflection_db_range: [0, 15]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [1, 0.5]
+      max: [5, 2]
+    typical_depth_m: [0, 4]
+    historical_periods: ["MEDIEVAL", "EARLY_MODERN", "MODERN"]
+    scientific_value: 0.7
+    training_samples: 780
+
+  - id: 6
+    name: "anchor_admiralty"
+    name_ru: "Адмиралтейский якорь"
+    category: "anchor"
+    description: "Классический якорь XVIII-XIX вв."
+    acoustic_properties:
+      reflection_db_range: [5, 18]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [2, 1]
+      max: [6, 3]
+    typical_depth_m: [0, 3]
+    historical_periods: ["EARLY_MODERN", "MODERN"]
+    scientific_value: 0.65
+    training_samples: 520
+
+  # Керамика
+  - id: 7
+    name: "amphora"
+    name_ru: "Амфора"
+    category: "ceramic"
+    description: "Античная амфора для транспортировки"
+    acoustic_properties:
+      reflection_db_range: [-5, 5]
+      typical_shadow: false
+      layered_structure: false
+    size_range_m:
+      min: [0.3, 0.2]
+      max: [1.5, 0.6]
+    typical_depth_m: [0.5, 5]
+    historical_periods: ["ANCIENT"]
+    scientific_value: 0.8
+    training_samples: 1560
+
+  - id: 8
+    name: "ceramic_cluster"
+    name_ru: "Скопление керамики"
+    category: "ceramic"
+    description: "Россыпь керамических изделий"
+    acoustic_properties:
+      reflection_db_range: [-3, 8]
+      typical_shadow: false
+      layered_structure: true
+    size_range_m:
+      min: [2, 0.5]
+      max: [30, 3]
+    typical_depth_m: [0.3, 4]
+    historical_periods: ["ANCIENT", "MEDIEVAL"]
+    scientific_value: 0.75
+    training_samples: 890
+
+  # Структуры
+  - id: 9
+    name: "stone_structure"
+    name_ru: "Каменная структура"
+    category: "structure"
+    description: "Каменная кладка, причал, мол"
+    acoustic_properties:
+      reflection_db_range: [5, 15]
+      typical_shadow: true
+      layered_structure: true
+    size_range_m:
+      min: [2, 1]
+      max: [100, 10]
+    typical_depth_m: [0, 8]
+    historical_periods: ["ANCIENT", "MEDIEVAL", "EARLY_MODERN"]
+    scientific_value: 0.7
+    training_samples: 450
+
+  - id: 10
+    name: "wooden_structure"
+    name_ru: "Деревянная структура"
+    category: "structure"
+    description: "Сваи, обшивка, причал"
+    acoustic_properties:
+      reflection_db_range: [-5, 5]
+      typical_shadow: true
+      layered_structure: true
+    size_range_m:
+      min: [0.5, 0.3]
+      max: [50, 5]
+    typical_depth_m: [0.5, 6]
+    historical_periods: ["MEDIEVAL", "EARLY_MODERN", "MODERN"]
+    scientific_value: 0.65
+    training_samples: 620
+
+  # Груз и балласт
+  - id: 11
+    name: "ballast_pile"
+    name_ru: "Балластная куча"
+    category: "cargo"
+    description: "Скопление балластных камней"
+    acoustic_properties:
+      reflection_db_range: [0, 10]
+      typical_shadow: false
+      layered_structure: false
+    size_range_m:
+      min: [3, 1]
+      max: [20, 4]
+    typical_depth_m: [0.3, 5]
+    historical_periods: ["ANCIENT", "MEDIEVAL", "EARLY_MODERN"]
+    scientific_value: 0.5
+    training_samples: 980
+
+  - id: 12
+    name: "cargo_scatter"
+    name_ru: "Россыпь груза"
+    category: "cargo"
+    description: "Разбросанный груз судна"
+    acoustic_properties:
+      reflection_db_range: [-5, 12]
+      typical_shadow: false
+      layered_structure: false
+    size_range_m:
+      min: [5, 1]
+      max: [100, 5]
+    typical_depth_m: [0, 6]
+    historical_periods: ["ANCIENT", "MEDIEVAL", "EARLY_MODERN", "MODERN"]
+    scientific_value: 0.6
+    training_samples: 1230
+
+  # Вооружение
+  - id: 13
+    name: "cannon"
+    name_ru: "Пушка"
+    category: "weapon"
+    description: "Корабельное орудие"
+    acoustic_properties:
+      reflection_db_range: [5, 18]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [1, 0.3]
+      max: [4, 0.8]
+    typical_depth_m: [0, 4]
+    historical_periods: ["EARLY_MODERN", "MODERN"]
+    scientific_value: 0.75
+    training_samples: 380
+
+  - id: 14
+    name: "metal_artifact"
+    name_ru: "Металлический артефакт"
+    category: "artifact"
+    description: "Неопознанный металлический объект"
+    acoustic_properties:
+      reflection_db_range: [0, 15]
+      typical_shadow: true
+      layered_structure: false
+    size_range_m:
+      min: [0.1, 0.1]
+      max: [3, 2]
+    typical_depth_m: [0, 5]
+    historical_periods: ["ANCIENT", "MEDIEVAL", "EARLY_MODERN", "MODERN"]
+    scientific_value: 0.55
+    training_samples: 2450
+
+# ============================================================================
+# Конфигурация моделей
+# ============================================================================
+
+models:
+  # U-Net для сегментации слоёв
+  layer_segmentation:
+    architecture: "unet"
+    encoder: "mobilenetv3_small"
+    input_size: [512, 256]
+    output_classes: 6  # water, mud, sand, clay, gravel, rock
+    weights: "layer_segmentation.hef"
+    training_dataset: "sbp_layers_v2"
+    training_samples: 15000
+    validation_accuracy: 0.87
+
+  # YOLOv8 для детекции объектов
+  object_detector:
+    architecture: "yolov8n"
+    input_size: [640, 640]
+    output_classes: 14
+    confidence_threshold: 0.35
+    nms_threshold: 0.45
+    weights: "object_detector.hef"
+    training_dataset: "sbp_objects_v3"
+    training_samples: 12500
+    validation_mAP: 0.72
+
+  # MobileNet для классификации грунта
+  sediment_classifier:
+    architecture: "mobilenetv3_small"
+    input_size: [224, 224]
+    output_classes: 5  # mud, sand, clay, gravel, rock
+    weights: "sediment_classifier.hef"
+    training_dataset: "sediment_textures_v1"
+    training_samples: 8000
+    validation_accuracy: 0.84
+
+  # Специализированная модель для археологии
+  archaeological_classifier:
+    architecture: "efficientnet_lite0"
+    input_size: [256, 256]
+    output_classes: 14
+    weights: "archaeological_classifier.hef"
+    training_dataset: "archaeological_sbp_v2"
+    training_samples: 18500
+    validation_accuracy: 0.79
+    notes: "Дообучена на реальных археологических находках"
+
+# ============================================================================
+# Параметры анализа
+# ============================================================================
+
+analysis:
+  # Пороги детекции
+  detection:
+    min_confidence: 0.35
+    archaeological_threshold: 0.5
+    high_priority_threshold: 0.75
+
+  # Группировка в памятники
+  site_clustering:
+    max_distance_m: 50
+    min_objects: 2
+
+  # Оценка периода по глубине
+  period_estimation:
+    ancient_depth_m: [2.0, 15.0]
+    medieval_depth_m: [1.0, 8.0]
+    early_modern_depth_m: [0.5, 5.0]
+    modern_depth_m: [0.0, 3.0]
+
+  # Веса для научной ценности
+  scientific_value_weights:
+    rarity: 0.3
+    age: 0.25
+    size: 0.15
+    preservation: 0.2
+    context: 0.1
