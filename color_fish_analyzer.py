@@ -19,7 +19,7 @@ import struct
 import threading
 import time
 from collections import deque
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import smbus
 
@@ -403,7 +403,7 @@ class ColorAnalyzer:
         self,
         spectrum: Dict[str, float],
         lab: Tuple[float, float, float]
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Оценка свежести рыбы по спектральным характеристикам.
 
