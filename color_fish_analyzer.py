@@ -8,13 +8,23 @@
 - Преобразование спектра в CIE L*a*b* и RGB цветовые пространства
 - Анализ свежести по насыщенности цвета (метод TVB-N корреляции)
 - Классификация цвета по доминирующей длине волны
+- Коррекция поглощения света водой на глубине (Beer-Lambert law)
+- Компенсация иридесценции чешуи (усреднение по углам)
+
+Иридесценция чешуи рыб:
+- Вызвана многослойной структурой кристаллов гуанина
+- Цвет зависит от угла наблюдения (интерференция тонких плёнок)
+- Рекомендуется усреднение нескольких измерений под разными углами
 
 Ссылки:
 - https://www.sciencedirect.com/science/article/pii/S2772753X22001174
 - https://pmc.ncbi.nlm.nih.gov/articles/PMC9265959/
+- Denton, E.J. (1970) "On the organization of reflecting surfaces in some
+  marine animals" Phil. Trans. R. Soc. Lond. B 258:285-313
 """
 
 import json
+import math
 import struct
 import threading
 import time
@@ -222,6 +232,23 @@ class ColorAnalyzer:
         'spoiled': {'saturation_min': 0.0, 'brightness_min': 0.0},
     }
 
+    # Коэффициенты поглощения света водой (1/м) по длинам волн
+    # Данные из Mobley, C.D. (1994) "Light and Water"
+    # Чистая морская вода, типичные значения
+    WATER_ABSORPTION_COEF = {
+        'violet': 0.0196,  # 450 нм - минимальное поглощение
+        'blue': 0.0257,    # 500 нм
+        'green': 0.0638,   # 550 нм
+        'yellow': 0.0890,  # 570 нм
+        'orange': 0.2400,  # 600 нм - значительное поглощение
+        'red': 0.3490,     # 650 нм - максимальное поглощение
+    }
+
+    # Параметры иридесценции чешуи (многослойные кристаллы гуанина)
+    # Рекомендуемое количество измерений для усреднения
+    IRIDESCENCE_MIN_SAMPLES = 3
+    IRIDESCENCE_OPTIMAL_SAMPLES = 5
+
     def spectrum_to_xyz(
         self,
         spectrum: Dict[str, float]
@@ -399,6 +426,134 @@ class ColorAnalyzer:
         else:
             return "Пурпурная"
 
+    def correct_depth_absorption(
+        self,
+        spectrum: Dict[str, float],
+        depth_m: float
+    ) -> Dict[str, float]:
+        """
+        Коррекция спектра с учётом поглощения света водой.
+
+        Применяет закон Бера-Ламберта для компенсации затухания
+        различных длин волн на заданной глубине.
+
+        Формула: I_corrected = I_measured * exp(α * d)
+        где α - коэффициент поглощения, d - глубина (м)
+
+        Важно: красный свет (650 нм) поглощается в ~18 раз сильнее
+        чем синий (450 нм), поэтому на глубине >5м красные оттенки
+        практически неразличимы без коррекции.
+
+        Args:
+            spectrum: Измеренные спектральные значения.
+            depth_m: Глубина измерения в метрах.
+
+        Returns:
+            Скорректированный спектр (истинные цвета объекта).
+        """
+        if depth_m <= 0:
+            return spectrum.copy()
+
+        corrected = {}
+        for channel, value in spectrum.items():
+            if channel in self.WATER_ABSORPTION_COEF:
+                alpha = self.WATER_ABSORPTION_COEF[channel]
+                # Коррекция по закону Бера-Ламберта
+                # Учитываем двойной путь света (туда и обратно)
+                correction_factor = math.exp(2 * alpha * depth_m)
+                corrected[channel] = value * correction_factor
+            else:
+                corrected[channel] = value
+
+        return corrected
+
+    def compensate_iridescence(
+        self,
+        spectrum_samples: List[Dict[str, float]]
+    ) -> Dict[str, Any]:
+        """
+        Компенсация иридесценции чешуи рыб.
+
+        Иридесценция (переливчатость) вызвана многослойной структурой
+        кристаллов гуанина в чешуе. Цвет зависит от угла наблюдения
+        из-за интерференции в тонких плёнках.
+
+        Метод: усреднение нескольких измерений под разными углами
+        для получения стабильной оценки истинного цвета.
+
+        Args:
+            spectrum_samples: Список спектральных измерений
+                              (минимум 3, оптимально 5+).
+
+        Returns:
+            Словарь с усреднённым спектром и метриками стабильности.
+        """
+        n_samples = len(spectrum_samples)
+
+        if n_samples == 0:
+            return {
+                'averaged_spectrum': {},
+                'stability_index': 0.0,
+                'iridescence_detected': False,
+                'samples_count': 0,
+                'warning': 'Нет данных для анализа',
+            }
+
+        if n_samples < self.IRIDESCENCE_MIN_SAMPLES:
+            return {
+                'averaged_spectrum': spectrum_samples[0],
+                'stability_index': 0.0,
+                'iridescence_detected': False,
+                'samples_count': n_samples,
+                'warning': f'Недостаточно измерений ({n_samples} < {self.IRIDESCENCE_MIN_SAMPLES})',
+            }
+
+        # Вычисление среднего значения по каждому каналу
+        channels = spectrum_samples[0].keys()
+        averaged = {}
+        std_devs = {}
+
+        for channel in channels:
+            values = [s.get(channel, 0) for s in spectrum_samples]
+            mean_val = sum(values) / len(values)
+            averaged[channel] = mean_val
+
+            # Стандартное отклонение
+            variance = sum((v - mean_val) ** 2 for v in values) / len(values)
+            std_devs[channel] = math.sqrt(variance)
+
+        # Индекс стабильности (обратный коэффициент вариации)
+        # Высокий индекс = стабильный цвет, низкий = сильная иридесценция
+        total_mean = sum(averaged.values())
+        total_std = sum(std_devs.values())
+
+        if total_mean > 0:
+            cv = total_std / total_mean  # Coefficient of variation
+            stability_index = max(0, 1 - cv)
+        else:
+            stability_index = 0.0
+
+        # Детекция иридесценции
+        # Если CV > 0.15, считаем что иридесценция значительная
+        iridescence_detected = (1 - stability_index) > 0.15
+
+        # Определение доминирующего переливающегося канала
+        max_variation_channel = max(std_devs, key=std_devs.get)
+
+        return {
+            'averaged_spectrum': {k: round(v, 4) for k, v in averaged.items()},
+            'stability_index': round(stability_index, 3),
+            'iridescence_detected': iridescence_detected,
+            'samples_count': n_samples,
+            'channel_std_devs': {k: round(v, 4) for k, v in std_devs.items()},
+            'max_variation_channel': max_variation_channel,
+            'recommendation': (
+                'Иридесценция обнаружена. Рекомендуется больше измерений.'
+                if iridescence_detected and n_samples < self.IRIDESCENCE_OPTIMAL_SAMPLES
+                else 'Стабильное измерение'
+            ),
+        }
+
     def assess_freshness(
         self,
         spectrum: Dict[str, float],
@@ -468,10 +623,16 @@ class FishColorAnalyzer:
     Объединяет работу с датчиком AS7262 и алгоритмы анализа цвета
     для определения характеристик чешуи рыб и подводных объектов.
 
+    Поддерживает:
+    - Коррекцию поглощения света водой на глубине
+    - Компенсацию иридесценции чешуи (многоугловое усреднение)
+
     Attributes:
         sensor: Объект датчика AS7262.
         analyzer: Объект анализатора цвета.
         data_queue: Очередь последних измерений.
+        iridescence_buffer: Буфер для компенсации иридесценции.
+        current_depth_m: Текущая глубина для коррекции (от датчика давления).
         running: Флаг работы фонового потока.
     """
 
@@ -479,7 +640,8 @@ class FishColorAnalyzer:
         self,
         bus_number: int = 1,
         led_current: int = 25,
-        queue_size: int = 10
+        queue_size: int = 10,
+        iridescence_samples: int = 5
     ):
         """
         Инициализация анализатора.
@@ -488,23 +650,53 @@ class FishColorAnalyzer:
             bus_number: Номер I2C шины.
             led_current: Ток подсветки в мА.
             queue_size: Размер буфера измерений.
+            iridescence_samples: Кол-во измерений для компенсации иридесценции.
         """
         self.sensor = AS7262Sensor(bus_number=bus_number)
         self.sensor.set_led(led_current)
         self.analyzer = ColorAnalyzer()
         self.data_queue: deque = deque(maxlen=queue_size)
+        self.iridescence_buffer: deque = deque(maxlen=iridescence_samples)
+        self.current_depth_m: float = 0.0
         self.running = False
         self._thread: Optional[threading.Thread] = None
 
-    def measure_and_analyze(self) -> Dict:
+    def set_depth(self, depth_m: float) -> None:
+        """
+        Установка текущей глубины для коррекции поглощения.
+
+        Должна вызываться при получении данных от датчика давления/глубины.
+
+        Args:
+            depth_m: Глубина в метрах (0 = поверхность).
+        """
+        self.current_depth_m = max(0.0, depth_m)
+
+    def measure_and_analyze(self, apply_depth_correction: bool = True) -> Dict:
         """
         Выполнение измерения и полного анализа.
+
+        Args:
+            apply_depth_correction: Применять ли коррекцию глубины.
 
         Returns:
             Словарь со всеми результатами анализа.
         """
         # Чтение спектра
-        spectrum = self.sensor.read_calibrated()
+        raw_spectrum = self.sensor.read_calibrated()
+
+        # Сохранение в буфер иридесценции
+        self.iridescence_buffer.append(raw_spectrum)
+
+        # Коррекция поглощения на глубине
+        if apply_depth_correction and self.current_depth_m > 0:
+            spectrum = self.analyzer.correct_depth_absorption(
+                raw_spectrum, self.current_depth_m
+            )
+            depth_corrected = True
+        else:
+            spectrum = raw_spectrum
+            depth_corrected = False
 
         # Цветовые преобразования
         xyz = self.analyzer.spectrum_to_xyz(spectrum)
@@ -518,7 +710,10 @@ class FishColorAnalyzer:
 
         return {
             'timestamp': time.time(),
-            'spectrum': spectrum,
+            'spectrum_raw': raw_spectrum,
+            'spectrum_corrected': spectrum,
+            'depth_m': self.current_depth_m,
+            'depth_corrected': depth_corrected,
             'rgb': rgb,
             'hsv': {
                 'hue': round(hsv[0], 1),
@@ -534,6 +729,92 @@ class FishColorAnalyzer:
             'freshness': freshness,
             'temperature_c': self.sensor.get_temperature(),
         }
+
+    def measure_with_iridescence_compensation(
+        self,
+        num_samples: int = 5,
+        delay_between_ms: int = 100
+    ) -> Dict:
+        """
+        Измерение с компенсацией иридесценции чешуи.
+
+        Выполняет несколько измерений и усредняет результаты
+        для компенсации переливчатости от кристаллов гуанина.
+
+        Args:
+            num_samples: Количество измерений для усреднения.
+            delay_between_ms: Задержка между измерениями (мс).
+
+        Returns:
+            Словарь с усреднёнными результатами и метриками иридесценции.
+        """
+        samples = []
+
+        for i in range(num_samples):
+            raw_spectrum = self.sensor.read_calibrated()
+
+            # Коррекция глубины для каждого измерения
+            if self.current_depth_m > 0:
+                spectrum = self.analyzer.correct_depth_absorption(
+                    raw_spectrum, self.current_depth_m
+                )
+            else:
+                spectrum = raw_spectrum
+
+            samples.append(spectrum)
+
+            if i < num_samples - 1:
+                time.sleep(delay_between_ms / 1000.0)
+
+        # Компенсация иридесценции
+        iridescence_result = self.analyzer.compensate_iridescence(samples)
+        averaged_spectrum = iridescence_result['averaged_spectrum']
+
+        # Анализ усреднённого спектра
+        xyz = self.analyzer.spectrum_to_xyz(averaged_spectrum)
+        lab = self.analyzer.xyz_to_lab(xyz)
+        rgb = self.analyzer.spectrum_to_rgb(averaged_spectrum)
+        hsv = self.analyzer.calculate_hsv(rgb)
+
+        color_class = self.analyzer.classify_fish_color(hsv)
+        freshness = self.analyzer.assess_freshness(averaged_spectrum, lab)
+
+        return {
+            'timestamp': time.time(),
+            'spectrum_averaged': averaged_spectrum,
+            'iridescence': {
+                'detected': iridescence_result['iridescence_detected'],
+                'stability_index': iridescence_result['stability_index'],
+                'samples_count': iridescence_result['samples_count'],
+                'max_variation_channel': iridescence_result['max_variation_channel'],
+                'recommendation': iridescence_result['recommendation'],
+            },
+            'depth_m': self.current_depth_m,
+            'rgb': rgb,
+            'hsv': {
+                'hue': round(hsv[0], 1),
+                'saturation': round(hsv[1], 3),
+                'value': round(hsv[2], 3),
+            },
+            'lab': {
+                'L': round(lab[0], 2),
+                'a': round(lab[1], 2),
+                'b': round(lab[2], 2),
+            },
+            'color_class': color_class,
+            'freshness': freshness,
+            'temperature_c': self.sensor.get_temperature(),
+        }
+
+    def get_iridescence_analysis(self) -> Dict:
+        """
+        Анализ иридесценции на основе накопленных измерений.
+
+        Returns:
+            Результат анализа иридесценции из буфера.
+        """
+        samples = list(self.iridescence_buffer)
+        return self.analyzer.compensate_iridescence(samples)
 
     def _sensor_loop(self) -> None:
         """Фоновый цикл измерений."""
