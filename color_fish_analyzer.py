@@ -21,6 +21,20 @@
 - https://pmc.ncbi.nlm.nih.gov/articles/PMC9265959/
 - Denton, E.J. (1970) "On the organization of reflecting surfaces in some
   marine animals" Phil. Trans. R. Soc. Lond. B 258:285-313
+- Mobley, C.D. (1994) "Light and Water: Radiative Transfer in Natural
+  Waters", Academic Press
+- Pope, R.M. & Fry, E.S. (1997) "Absorption spectrum (380-700 nm) of pure
+  water. II. Integrating cavity measurements", Applied Optics 36(33):8710
+- Solonenko, M.G. & Mobley, C.D. (2015) "Inherent optical properties of
+  Jerlov water types", Applied Optics 54(17):5392-5401, PMID:26192839
+- Gur, D. et al. (2013) "Guanine-Based Photonic Crystals in Fish Scales
+  Form from an Amorphous Precursor", Angew. Chem. Int. Ed. 52(1):388-391,
+  PMID:22951999
+- Funt, N. et al. (2017) "Koi Fish-Scale Iridophore Cells Orient Guanine
+  Crystals to Maximize Light Reflection", ChemPlusChem, PMID:31961575
+
+Правила проекта (обязательный научный источник, эвристика выбора решений,
+12-фазный HLD-план) — см. CLAUDE.md.
 """
 
 import json
@@ -232,9 +246,26 @@ class ColorAnalyzer:
         'spoiled': {'saturation_min': 0.0, 'brightness_min': 0.0},
     }
 
-    # Коэффициенты поглощения света водой (1/м) по длинам волн
-    # Данные из Mobley, C.D. (1994) "Light and Water"
-    # Чистая морская вода, типичные значения
+    # Коэффициенты поглощения света водой (1/м) по длинам волн.
+    #
+    # ЛИТЕРАТУРНЫЕ ЗНАЧЕНИЯ ПО УМОЛЧАНИЮ (не для точных измерений!):
+    # порядок величины и относительное соотношение каналов взяты из
+    # общепринятых океанографических источников:
+    # - Mobley, C.D. (1994) "Light and Water: Radiative Transfer in
+    #   Natural Waters", Academic Press - спектральная форма поглощения
+    #   в видимом диапазоне (красный поглощается на порядок сильнее синего).
+    # - Pope, R.M. & Fry, E.S. (1997) "Absorption spectrum (380-700 nm)
+    #   of pure water. II. Integrating cavity measurements",
+    #   Applied Optics 36(33):8710-8723 - эталонный спектр чистой воды.
+    # - Solonenko, M.G. & Mobley, C.D. (2015) "Inherent optical properties
+    #   of Jerlov water types", Applied Optics 54(17):5392-5401, PMID:26192839
+    #   - коэффициенты сильно зависят от типа воды (Jerlov I/IA/IB/II/III
+    #     для океана, 1-9 для прибрежных вод); табличные константы одного
+    #     типа воды НЕ применимы ко всем акваториям.
+    #
+    # Согласно правилу проекта (CLAUDE.md, раздел 2) эти значения — только
+    # fallback. Для полевой работы использовать calibrate_absorption()
+    # с эталонной мишенью на известных глубинах в месте эксплуатации.
     WATER_ABSORPTION_COEF = {
         'violet': 0.0196,  # 450 нм - минимальное поглощение
         'blue': 0.0257,    # 500 нм
@@ -244,10 +275,32 @@ class ColorAnalyzer:
         'red': 0.3490,     # 650 нм - максимальное поглощение
     }
 
-    # Параметры иридесценции чешуи (многослойные кристаллы гуанина)
-    # Рекомендуемое количество измерений для усреднения
+    # Параметры иридесценции чешуи (многослойные кристаллы гуанина).
+    #
+    # Научное обоснование механизма (не даёт числовых порогов, но
+    # обосновывает необходимость многоугловых измерений):
+    # - Gur, D. et al. (2013) "Guanine-Based Photonic Crystals in Fish
+    #   Scales Form from an Amorphous Precursor", Angew. Chem. Int. Ed.
+    #   52(1):388-391, PMID:22951999 - многослойные кристаллы гуанина
+    #   создают интерференционные цвета, зависящие от угла падения света.
+    # - Funt, N. et al. (2017) "Koi Fish-Scale Iridophore Cells Orient
+    #   Guanine Crystals to Maximize Light Reflection", ChemPlusChem,
+    #   PMID:31961575 - >95% кристаллов ориентированы параллельно
+    #   поверхности чешуи; положение и интенсивность интерференционного
+    #   пика зависят от угла наклона и межслойного расстояния кристаллов.
+    #
+    # Число измерений для усреднения выбрано инженерно (компромисс между
+    # подавлением угловой дисперсии и временем цикла измерения), а не из
+    # конкретной статьи - см. calibrate_iridescence_samples() для
+    # эмпирической настройки под конкретный вид/датчик.
     IRIDESCENCE_MIN_SAMPLES = 3
     IRIDESCENCE_OPTIMAL_SAMPLES = 5
+
+    def __init__(self) -> None:
+        """Инициализация анализатора с пустой калибровкой поглощения."""
+        # Если задано (через calibrate_absorption), заменяет
+        # WATER_ABSORPTION_COEF реальными измеренными коэффициентами.
+        self._calibrated_absorption_coef: Optional[Dict[str, float]] = None
 
     def spectrum_to_xyz(
         self,
@@ -454,10 +507,14 @@ class ColorAnalyzer:
         if depth_m <= 0:
             return spectrum.copy()
 
+        # Калиброванные по месту эксплуатации коэффициенты имеют приоритет
+        # над литературными значениями по умолчанию (см. calibrate_absorption).
+        coefficients = self._calibrated_absorption_coef or self.WATER_ABSORPTION_COEF
+
         corrected = {}
         for channel, value in spectrum.items():
-            if channel in self.WATER_ABSORPTION_COEF:
-                alpha = self.WATER_ABSORPTION_COEF[channel]
+            if channel in coefficients:
+                alpha = coefficients[channel]
                 # Коррекция по закону Бера-Ламберта
                 # Учитываем двойной путь света (туда и обратно)
                 correction_factor = math.exp(2 * alpha * depth_m)
@@ -466,6 +523,102 @@ class ColorAnalyzer:
                 corrected[channel] = value
 
         return corrected
+
+    def calibrate_absorption(
+        self,
+        reference_measurements: List[Tuple[float, Dict[str, float]]]
+    ) -> Dict[str, float]:
+        """
+        Эмпирическая калибровка коэффициентов поглощения воды по месту.
+
+        Реализует Правило "299/48/32" проекта (CLAUDE.md, раздел 2/3):
+        табличные океанографические коэффициенты (Jerlov-типы, Mobley 1994)
+        сильно зависят от конкретной акватории (мутность, планктон,
+        растворённое органическое вещество), поэтому вместо единственного
+        "лучшего" литературного значения предусмотрена процедура измерения
+        на месте — она всегда точнее любой таблицы для конкретных условий.
+
+        Метод: измерить один и тот же эталонный объект известной
+        отражательной способности (например, серую/белую мишень) на
+        нескольких известных глубинах. Поглощение подчиняется закону
+        Бера-Ламберта, поэтому логарифм измеренной интенсивности линейно
+        убывает с глубиной:
+
+            ln(I(d)) = ln(I0) - 2 * alpha * d
+
+        Коэффициент alpha для каждого канала находится методом наименьших
+        квадратов (линейная регрессия ln(I) от d).
+
+        Args:
+            reference_measurements: Список (глубина_м, спектр) для одного
+                и того же эталонного объекта на разных глубинах.
+                Минимум 2 точки, рекомендуется 4+ на разных глубинах.
+
+        Returns:
+            Словарь откалиброванных коэффициентов поглощения (1/м) по
+            каналам. Также сохраняется внутри анализатора и автоматически
+            используется в correct_depth_absorption().
+
+        Raises:
+            ValueError: если передано менее 2 измерений.
+        """
+        if len(reference_measurements) < 2:
+            raise ValueError(
+                "Для калибровки нужно минимум 2 измерения на разных "
+                "глубинах, получено: %d" % len(reference_measurements)
+            )
+
+        channels = reference_measurements[0][1].keys()
+        calibrated: Dict[str, float] = {}
+
+        for channel in channels:
+            depths = []
+            log_intensities = []
+
+            for depth_m, spectrum in reference_measurements:
+                value = spectrum.get(channel, 0)
+                if value > 0:
+                    depths.append(depth_m)
+                    log_intensities.append(math.log(value))
+
+            if len(depths) < 2:
+                # Недостаточно валидных точек для этого канала - оставляем
+                # литературное значение по умолчанию без изменений.
+                calibrated[channel] = self.WATER_ABSORPTION_COEF.get(
+                    channel, 0.0
+                )
+                continue
+
+            # Линейная регрессия методом наименьших квадратов:
+            # log_intensity = intercept - 2 * alpha * depth
+            n = len(depths)
+            mean_d = sum(depths) / n
+            mean_ln_i = sum(log_intensities) / n
+
+            numerator = sum(
+                (d - mean_d) * (ln_i - mean_ln_i)
+                for d, ln_i in zip(depths, log_intensities)
+            )
+            denominator = sum((d - mean_d) ** 2 for d in depths)
+
+            if denominator == 0:
+                calibrated[channel] = self.WATER_ABSORPTION_COEF.get(
+                    channel, 0.0
+                )
+                continue
+
+            slope = numerator / denominator  # = -2 * alpha
+            alpha = max(0.0, -slope / 2.0)
+            calibrated[channel] = alpha
+
+        self._calibrated_absorption_coef = calibrated
+        return calibrated
+
+    @property
+    def is_absorption_calibrated(self) -> bool:
+        """Признак того, что используются калиброванные, а не табличные
+        коэффициенты поглощения."""
+        return self._calibrated_absorption_coef is not None
 
     def compensate_iridescence(
         self,
