@@ -12,6 +12,9 @@
 - Компенсация иридесценции чешуи (усреднение по углам)
 - Метрологическая калибровка: эталонная мишень, температурная
   компенсация, коррекция дрейфа (Фаза 2, см. CLAUDE.md)
+- Тонкоплёночная (Fresnel) модель иридесценции с эмпирической оценкой
+  толщины кристалла гуанина по угловому сдвигу пика (Фаза 4)
+- Синхронизация с датчиком глубины MS5837 (Фаза 3, см. depth_sensor.py)
 
 Ссылки:
 - https://www.sciencedirect.com/science/article/pii/S2772753X22001174
@@ -34,6 +37,14 @@
   DOI:10.3103/S073527272302005X
 - Labsphere/Edmund Optics technical notes on Spectralon diffuse
   reflectance standards (ratio-method white reference calibration)
+- Land, M.F. (1972) "The physics and biology of animal reflectors",
+  Progress in Biophysics and Molecular Biology 24:75-106 - показатели
+  преломления кристаллов гуанина (~1.83) и межкристальной цитоплазмы
+  (~1.33-1.4) в иридофорах
+- Hecht, E. "Optics", 5th ed. - формула Эйри для тонкоплёночной
+  интерференции (Фаза 4)
+- TE Connectivity, "MS5837-30BA" datasheet - протокол датчика глубины
+  (Фаза 3, см. depth_sensor.py)
 
 Правила проекта (обязательный научный источник, эвристика выбора решений,
 12-фазный HLD-план) — см. CLAUDE.md.
@@ -1089,6 +1100,238 @@ class ColorAnalyzer:
             factor = drift_factors.get(channel, 1.0)
             corrected[channel] = value / factor if factor > 0 else value
         return corrected
+
+    # =====================================================================
+    # Фаза 4: Тонкоплёночная (Fresnel) модель иридесценции
+    # =====================================================================
+
+    # Оптические константы кристаллов гуанина и межкристального
+    # вещества (цитоплазмы иридофоров). Классическое измерение:
+    # - Land, M.F. (1972) "The physics and biology of animal
+    #   reflectors", Progress in Biophysics and Molecular Biology
+    #   24:75-106 - показатель преломления кристаллов гуанина ~1.83
+    #   (высокое значение вдоль оптической оси), межкристальной
+    #   цитоплазмы ~1.33-1.4.
+    # Значения ниже - справочные (используются как умолчание модели
+    # одного слоя, см. предупреждение в докстринге thin_film_reflectance).
+    GUANINE_REFRACTIVE_INDEX = 1.83
+    CYTOPLASM_REFRACTIVE_INDEX = 1.35
+    WATER_REFRACTIVE_INDEX = 1.33
+
+    def thin_film_reflectance(
+        self,
+        wavelength_nm: float,
+        thickness_nm: float,
+        angle_deg: float,
+        n_incident: Optional[float] = None,
+        n_film: Optional[float] = None,
+        n_substrate: Optional[float] = None,
+    ) -> float:
+        """
+        Отражательная способность одного тонкого слоя (формула Эйри).
+
+        Физическая модель интерференции в тонкой плёнке (Hecht, E.
+        "Optics", 5th ed., глава про тонкоплёночную интерференцию) -
+        та же физика, что объясняет иридесценцию мыльной плёнки или
+        плёнки масла на воде.
+
+        ВАЖНО - ограничение модели: реальные иридофоры чешуи состоят из
+        МНОГОСЛОЙНОГО стека пластинок гуанина (Gur et al. 2013, Funt et
+        al. 2017 - см. докстринг compensate_iridescence), а эта функция
+        считает только ОДИН слой. Многослойная матрица переноса (transfer
+        matrix method, N слоёв) физически точнее, но существенно сложнее
+        численно - это заявленное упрощение Фазы 4 (единственный слой
+        как первое приближение), а не полная замена усреднения по
+        измерениям. На практике оба метода дополняют друг друга:
+        усреднение (compensate_iridescence) даёт устойчивую оценку
+        среднего цвета, эта модель - физическую интерпретацию сдвига
+        пика по углу.
+
+        Args:
+            wavelength_nm: Длина волны падающего света (нм).
+            thickness_nm: Толщина плёнки (кристалла гуанина, нм).
+            angle_deg: Угол падения от нормали (град).
+            n_incident: Показатель преломления среды падения
+                (по умолчанию вода, WATER_REFRACTIVE_INDEX).
+            n_film: Показатель преломления плёнки (по умолчанию
+                GUANINE_REFRACTIVE_INDEX).
+            n_substrate: Показатель преломления подложки (по умолчанию
+                CYTOPLASM_REFRACTIVE_INDEX).
+
+        Returns:
+            Отражательная способность (0-1).
+        """
+        n0 = n_incident if n_incident is not None else self.WATER_REFRACTIVE_INDEX
+        n1 = n_film if n_film is not None else self.GUANINE_REFRACTIVE_INDEX
+        n2 = (
+            n_substrate
+            if n_substrate is not None
+            else self.CYTOPLASM_REFRACTIVE_INDEX
+        )
+
+        theta0 = math.radians(angle_deg)
+        # Закон Снеллиуса: угол преломления внутри плёнки.
+        sin_theta1 = (n0 / n1) * math.sin(theta0)
+        sin_theta1 = min(1.0, max(-1.0, sin_theta1))
+        theta1 = math.asin(sin_theta1)
+
+        delta = (4 * math.pi * n1 * thickness_nm * math.cos(theta1)) / wavelength_nm
+
+        r1 = (n0 - n1) / (n0 + n1)
+        r2 = (n1 - n2) / (n1 + n2)
+
+        numerator = r1 ** 2 + r2 ** 2 + 2 * r1 * r2 * math.cos(delta)
+        denominator = 1 + (r1 * r2) ** 2 + 2 * r1 * r2 * math.cos(delta)
+
+        return numerator / denominator if denominator != 0 else 0.0
+
+    def _peak_condition_denominator(
+        self,
+        order: int,
+        n_incident: float,
+        n_film: float,
+        n_substrate: float,
+    ) -> float:
+        """
+        Знаменатель условия максимума интерференции (см.
+        predict_peak_wavelength) с учётом знака r1*r2.
+
+        Вывод: R(δ) как функция x=cos(δ) монотонна с производной
+        dR/dx, знак которой равен знаку r1*r2 (т.к. |r1|,|r2| < 1
+        всегда). δ = 4π*n1*d*cosθ1/λ, поэтому λ_peak = 4*n1*d*cosθ1 /
+        знаменатель, где знаменатель:
+        - r1*r2 >= 0: максимум при δ=2πm (нет доп. фазового сдвига,
+          обе границы отражают "в одной фазе") -> знаменатель = 2m.
+        - r1*r2 < 0: максимум при δ=(2m-1)π (границы отражают в
+          противофазе, типичный случай для плёнки плотнее ОБЕИХ
+          соседних сред, как гуанин между водой и цитоплазмой) ->
+          знаменатель = (2m-1).
+        """
+        r1 = (n_incident - n_film) / (n_incident + n_film)
+        r2 = (n_film - n_substrate) / (n_film + n_substrate)
+
+        if r1 * r2 >= 0:
+            return float(2 * order)
+        return float(2 * order - 1)
+
+    def predict_peak_wavelength(
+        self,
+        thickness_nm: float,
+        angle_deg: float,
+        order: int = 1,
+        n_incident: Optional[float] = None,
+        n_film: Optional[float] = None,
+        n_substrate: Optional[float] = None,
+    ) -> float:
+        """
+        Длина волны максимума конструктивной интерференции при заданном
+        угле.
+
+        Условие максимума зависит от знака произведения коэффициентов
+        Френеля границ r1*r2 (см. _peak_condition_denominator):
+        λ_peak(θ) = 4 * n_film * d * cos(θ_преломления) / знаменатель.
+        Для типичной геометрии иридофора (плёнка гуанина плотнее и
+        воды, и цитоплазмы, n0 < n1 > n2) знаменатель = 2*order-1,
+        а НЕ 2*order, как было бы для монотонного профиля показателей
+        преломления - это ключевое отличие от "учебного" случая плёнки
+        масла на воде (n_воздух < n_масло < n_вода).
+
+        Args:
+            thickness_nm: Толщина кристалла гуанина (нм).
+            angle_deg: Угол наблюдения/падения (град).
+            order: Порядок интерференции (обычно 1 для видимого
+                диапазона при толщине ~100 нм).
+            n_incident: Показатель преломления среды падения.
+            n_film: Показатель преломления плёнки.
+            n_substrate: Показатель преломления подложки.
+
+        Returns:
+            Длина волны пика отражения (нм).
+        """
+        n0 = n_incident if n_incident is not None else self.WATER_REFRACTIVE_INDEX
+        n1 = n_film if n_film is not None else self.GUANINE_REFRACTIVE_INDEX
+        n2 = (
+            n_substrate
+            if n_substrate is not None
+            else self.CYTOPLASM_REFRACTIVE_INDEX
+        )
+
+        theta0 = math.radians(angle_deg)
+        sin_theta1 = min(1.0, max(-1.0, (n0 / n1) * math.sin(theta0)))
+        theta1 = math.asin(sin_theta1)
+
+        denom = self._peak_condition_denominator(order, n0, n1, n2)
+        return (4 * n1 * thickness_nm * math.cos(theta1)) / denom
+
+    def calibrate_crystal_thickness(
+        self,
+        angle_peak_observations: List[Tuple[float, float]],
+        order: int = 1,
+        n_incident: Optional[float] = None,
+        n_film: Optional[float] = None,
+        n_substrate: Optional[float] = None,
+    ) -> float:
+        """
+        Эмпирическая оценка толщины кристалла гуанина по наблюдаемому
+        сдвигу пика отражения с углом (обратная задача к
+        predict_peak_wavelength).
+
+        Требует реальных многоугловых измерений пика отражения (см.
+        Фаза 4 HLD: "много-угловые измерения через сервопривод/массив
+        датчиков") - без них модель однослойной плёнки использует
+        только литературные показатели преломления и не может дать
+        объект-специфичную толщину слоя (CLAUDE.md §2 - калибровка
+        вместо жёстких констант).
+
+        Модель линейна по толщине при фиксированном угле:
+        λ_i ≈ k_i * d, где k_i = 4*n1*cos(θ1_i)/знаменатель_i (тот же
+        знаменатель, зависящий от знака r1*r2, что и в
+        predict_peak_wavelength - см. _peak_condition_denominator).
+        Толщина находится МНК через начало координат (тот же метод,
+        что и в calibrate_temperature() Фазы 2).
+
+        Args:
+            angle_peak_observations: Список (угол_град, длина_волны_
+                пика_нм) - минимум 1 наблюдение, рекомендуется 3+ на
+                разных углах для устойчивой оценки.
+            order: Порядок интерференции.
+            n_incident: Показатель преломления среды падения.
+            n_film: Показатель преломления плёнки.
+            n_substrate: Показатель преломления подложки.
+
+        Returns:
+            Оценка толщины кристалла гуанина (нм).
+
+        Raises:
+            ValueError: если наблюдений нет.
+        """
+        if not angle_peak_observations:
+            raise ValueError("Нужно хотя бы одно наблюдение (угол, λ_пика).")
+
+        n0 = n_incident if n_incident is not None else self.WATER_REFRACTIVE_INDEX
+        n1 = n_film if n_film is not None else self.GUANINE_REFRACTIVE_INDEX
+        n2 = (
+            n_substrate
+            if n_substrate is not None
+            else self.CYTOPLASM_REFRACTIVE_INDEX
+        )
+        denom = self._peak_condition_denominator(order, n0, n1, n2)
+
+        numerator = 0.0
+        denominator = 0.0
+        for angle_deg, peak_wavelength_nm in angle_peak_observations:
+            theta0 = math.radians(angle_deg)
+            sin_theta1 = min(1.0, max(-1.0, (n0 / n1) * math.sin(theta0)))
+            theta1 = math.asin(sin_theta1)
+            k = (4 * n1 * math.cos(theta1)) / denom
+
+            numerator += k * peak_wavelength_nm
+            denominator += k ** 2
+
+        if denominator == 0:
+            return 0.0
+
+        return numerator / denominator
 
 
 class FishColorAnalyzer:
