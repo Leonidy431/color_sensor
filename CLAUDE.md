@@ -174,6 +174,13 @@ color_sensor/
 │                                     # калибровка (Фазы 1-2)
 ├── blueos_fish_ai_module/           # Hailo-8L: детекция/классификация рыб
 │   └── src/{hailo_inference,data_fusion,api,mavlink}.py
-└── blueos_sbp_ai_module/            # Hailo-8L: археологическая детекция SBP
-    └── src/{sbp_parser,hailo_sbp_inference,archaeological_detector,api,mavlink}.py
+├── blueos_sbp_ai_module/            # Hailo-8L: археологическая детекция SBP
+│   └── src/{sbp_parser,hailo_sbp_inference,archaeological_detector,api,mavlink}.py
+└── blueos_hsi_camera_module/        # NVIDIA Orin: гиперспектральная
+    │                                 # классификация материалов (Ecotone UHI)
+    └── src/{hsi_calibration,spectral_analysis,api}.py
 ```
+
+Примечание: `PATENT.md` пока описывает только первые три актива
+(Fish Color Analyzer, Fish AI, SBP AI); HSI-модуль — новый актив,
+патентную декларацию для него предстоит добавить отдельным этапом.
